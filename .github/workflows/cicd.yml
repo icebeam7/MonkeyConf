@@ -1,0 +1,35 @@
+name: CICD
+
+on: push
+
+jobs:
+  build-Android:
+    runs-on: macos-latest    
+    steps:
+    - name: Checkout 
+      uses: actions/checkout@v1
+
+    - name: Setup Android signin
+      run: |
+        echo "${{ secrets.KEYSTORE }}" > monkeyconf.keystore.asc
+        gpg -d --passphrase "${{ secrets.GPG_PASSWORD }}" --batch monkeyconf.keystore.asc > ./MonkeyConf/MonkeyConf.Android/monkeyconf.keystore
+    
+    - name: Set Android Version
+      uses: damienaicheh/update-android-version-manifest-action@v1.0.0
+      with:
+        android-manifest-path: './MonkeyConf/MonkeyConf.Android/Properties/AndroidManifest.xml'
+        version-name: ${{ secrets.APP_VERSION }}
+        version-code: ${{ github.run_number }}
+        print-file: true
+
+    - name: Restore NuGet packages
+      run: nuget restore
+      
+    - name: Build Android
+      run: MSBuild /t:SignAndroidPackage /p:Configuration=Release /p:AndroidPackageFormat=apk /p:AndroidKeyStore=true /p:AndroidSigningKeyAlias=monkeyconfalias /p:AndroidSigningKeyPass=${{ secrets.KEYSTORE_PASSWORD }} /p:AndroidSigningKeyStore=monkeyconf.keystore /p:AndroidSigningStorePass=${{ secrets.KEYSTORE_PASSWORD }} ./MonkeyConf/MonkeyConf.Android/MonkeyConf.Android.csproj
+
+    - name: Obtain Android APK file
+      uses: actions/upload-artifact@v2.2.4
+      with:
+        name: MonkeyConf
+        path: MonkeyConf/MonkeyConf.Android/bin/Release/com.companyname.monkeyconf-Signed.apk
